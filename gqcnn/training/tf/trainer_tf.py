@@ -48,6 +48,7 @@ import tensorflow as tf
 import threading
 import time
 import yaml
+import math
 
 import IPython
 
@@ -323,13 +324,14 @@ class GQCNNTrainerTF(object):
                     logging.info('Max ' +  str(np.max(predictions)))
                     logging.info('Min ' + str(np.min(predictions)))
                 elif self.cfg['loss'] != 'weighted_cross_entropy':
-                    ex = np.exp(output - np.tile(np.max(output, axis=1)[:,np.newaxis], [1,2]))
-                    softmax = ex / np.tile(np.sum(ex, axis=1)[:,np.newaxis], [1,2])
+                    if self._angular_bins == 0:
+                        ex = np.exp(output - np.tile(np.max(output, axis=1)[:,np.newaxis], [1,2]))
+                        softmax = ex / np.tile(np.sum(ex, axis=1)[:,np.newaxis], [1,2])
 		        
-                    logging.info('Max ' +  str(np.max(softmax[:,1])))
-                    logging.info('Min ' + str(np.min(softmax[:,1])))
-                    logging.info('Pred nonzero ' + str(np.sum(softmax[:,1] > 0.5)))
-                    logging.info('True nonzero ' + str(np.sum(batch_labels)))
+                        logging.info('Max ' +  str(np.max(softmax[:,1])))
+                        logging.info('Min ' + str(np.min(softmax[:,1])))
+                        logging.info('Pred nonzero ' + str(np.sum(softmax[:,1] > 0.5)))
+                        logging.info('True nonzero ' + str(np.sum(batch_labels)))
                    
                 else:
                     sigmoid = 1.0 / (1.0 + np.exp(-output))
@@ -619,7 +621,7 @@ class GQCNNTrainerTF(object):
                 self.im_depth_sub_mean = self.gqcnn.im_depth_sub_mean
                 self.im_depth_sub_std = self.gqcnn.im_depth_sub_std
             elif os.path.exists(im_depth_sub_mean_filename) and os.path.exists(im_depth_sub_std_filename):
-                self.im_depth_sum_mean = np.load(im_depth_sub_mean_filename)
+                self.im_depth_sub_mean = np.load(im_depth_sub_mean_filename)
                 self.im_depth_sub_std = np.load(im_depth_sub_std_filename)
             else:
                 self.im_depth_sub_mean = 0
@@ -715,8 +717,8 @@ class GQCNNTrainerTF(object):
         if self._angular_bins > 0:
             logging.info('Calculating angular bin statistics...')
             bin_counts = np.zeros((self._angular_bins,))
-            for m in self.num_tensors:
-                self.dataset.tensor(self.pose_field_name, m).arr
+            for m in range(self.num_tensors):
+                pose_arr = self.dataset.tensor(self.pose_field_name, m).arr
                 angles = pose_arr[:, 3]
                 pi_2 = math.pi 
                 pi_4 = math.pi / 2
@@ -983,7 +985,7 @@ class GQCNNTrainerTF(object):
         with tf.name_scope('train_labels_node'):
             self.train_labels_batch = tf.placeholder(train_label_dtype, (self.train_batch_size,))
         if self._angular_bins > 0:
-            self.train_pred_mask_batch = tf.placeholder(tf.int32, (self.train_batch_size, self.angular_bins*2))
+            self.train_pred_mask_batch = tf.placeholder(tf.int32, (self.train_batch_size, self._angular_bins*2))
 
         # create queue
         with tf.name_scope('data_queue'):
